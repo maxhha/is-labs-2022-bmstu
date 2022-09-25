@@ -1,0 +1,25 @@
+[package]
+name = "lab01"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = "1.0.144"
+wmi = "0.11.2"
+
+[[bin]]
+
+name="app"
+path = "src/app/bin/main.rs"
+
+[[bin]]
+
+name ="installer"
+path = "src/installer/bin/main.rs"
+
+[lib]
+
+name="security"
+path="src/security/lib.rs"
