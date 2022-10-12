@@ -1,3 +1,5 @@
+use std::process::exit;
+
 fn bytes_to_binary(s: &[u8]) -> Vec<char> {
     s.into_iter()
         .flat_map(|x| {
@@ -346,19 +348,42 @@ fn decrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
     res
 }
 
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[arg(short, long)]
+    decode: bool,
+    #[arg(short, long)]
+    encode: bool,
+    #[arg(short, long)]
+    key: String,
+    #[arg(short, long)]
+    input: std::path::PathBuf,
+    #[arg(short, long)]
+    output: std::path::PathBuf,
+}
+
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let args = Cli::parse();
 
-    let keys = generate_keys(&args[1]);
-    let inf = &args[2];
-    let outf = &args[3];
+    if !(args.decode ^ args.encode) {
+        eprintln!("Must pass one of --encode or --decode flags");
+        exit(1);
+    }
 
-    let input = std::fs::read(inf).unwrap();
+    let keys = generate_keys(&format!("{:08}", args.key));
 
-    // let data: String = encrypt(&input, &keys).into_iter().collect();
-    let data = decrypt(&input, &keys);
+    let input = std::fs::read(&args.input).unwrap();
 
-    std::fs::write(outf, &data).unwrap();
+    let data = if args.decode {
+        decrypt(&input, &keys)
+    } else {
+        encrypt(&input, &keys)
+    };
+
+    std::fs::write(&args.output, &data).unwrap();
 }
 
 #[cfg(test)]
