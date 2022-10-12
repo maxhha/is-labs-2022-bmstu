@@ -9,6 +9,15 @@ fn bytes_to_binary(s: &[u8]) -> Vec<char> {
         .collect()
 }
 
+fn binary_to_bytes(s: &[char]) -> Vec<u8> {
+    s.chunks(8)
+        .map(|x| {
+            let x: String = x.into_iter().collect();
+            u8::from_str_radix(&x, 2).unwrap()
+        })
+        .collect()
+}
+
 #[rustfmt::skip]
 fn pc1<T: Copy>(s: &[T]) -> (Vec<T>, Vec<T>) {
     let c0 = vec![
@@ -301,7 +310,7 @@ fn rounds(binary_ip: &[char], keys: &[Vec<char>], decrypt: bool) -> (Vec<char>, 
     (left_block, right_block)
 }
 
-fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<char> {
+fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
     let chunks = data.chunks(8);
     let mut res = Vec::new();
     let mut buffer = vec![0u8; 8];
@@ -316,7 +325,7 @@ fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<char> {
         let (l, r) = rounds(&binary_ip, keys, false);
         let lr: Vec<_> = r.into_iter().chain(l.into_iter()).collect();
         let lr = ipl1(&lr);
-        res.extend(lr);
+        res.extend(binary_to_bytes(&lr));
     }
 
     res
@@ -325,16 +334,13 @@ fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<char> {
 fn decrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
     let mut res = Vec::new();
 
-    for chunk in data.chunks(64) {
-        let chunk: Vec<char> = chunk.into_iter().map(|x| char::from(*x)).collect();
+    for chunk in data.chunks(8) {
+        let chunk: Vec<char> = bytes_to_binary(chunk);
         let chunk = ip(&chunk);
         let (l, r) = rounds(&chunk, keys, true);
         let lr: Vec<_> = r.into_iter().chain(l.into_iter()).collect();
         let lr = ipl1(&lr);
-        res.extend(lr.chunks(8).map(|x| {
-            let x: String = x.into_iter().collect();
-            u8::from_str_radix(&x, 2).unwrap()
-        }));
+        res.extend(binary_to_bytes(&lr));
     }
 
     res
@@ -366,8 +372,7 @@ mod tests {
         let key = "12345678";
         let keys = generate_keys(key);
         let enc_data = encrypt(message, &keys);
-        let enc_data = enc_data.into_iter().collect::<String>();
-        let dec_data = decrypt(enc_data.as_bytes(), &keys);
+        let dec_data = decrypt(&enc_data, &keys);
         assert_eq!(&dec_data, "hello world!\n...".as_bytes());
     }
 }
