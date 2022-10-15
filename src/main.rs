@@ -338,6 +338,18 @@ fn decrypt(data: &[u8], keys: &[Vec<bool>]) -> Vec<u8> {
     res
 }
 
+fn make_match_size(data: &mut Vec<u8>, target: usize) {
+    let r = target - data.len() % target;
+    let r: u8 = r.try_into().unwrap();
+    data.extend((0..r).into_iter().map(|_| r))
+}
+
+fn make_original_size(data: &mut Vec<u8>) {
+    let r = data.last().unwrap();
+    let s = data.len() - usize::from(*r);
+    data.drain(s..data.len());
+}
+
 use clap::Parser;
 
 #[derive(Parser)]
@@ -368,9 +380,7 @@ fn main() {
     let mut input = std::fs::read(&args.input).unwrap();
 
     if args.encode {
-        let r = 8 - input.len() % 8;
-        let r: u8 = r.try_into().unwrap();
-        input.extend((0..r).into_iter().map(|_| r))
+        make_match_size(&mut input, 8);
     }
 
     let mut data = if args.decode {
@@ -380,9 +390,7 @@ fn main() {
     };
 
     if args.decode {
-        let r = data.last().unwrap();
-        let s = data.len() - usize::from(*r);
-        data.drain(s..data.len());
+        make_original_size(&mut data);
     }
 
     std::fs::write(&args.output, &data).unwrap();
