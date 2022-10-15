@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{ops::BitXor, process::exit};
 
 fn bytes_to_binary(s: &[u8]) -> Vec<bool> {
     s.into_iter()
@@ -60,7 +60,7 @@ fn generate_keys(s: &str) -> Vec<Vec<bool>> {
 }
 
 #[rustfmt::skip]
-fn ip<T: Copy>(s: &[T]) -> Vec<T> {
+fn permutation_ip<T: Copy>(s: &[T]) -> Vec<T> {
 	vec![
         s[57], s[49], s[41], s[33], s[25], s[17], s[9], s[1],
 		s[59], s[51], s[43], s[35], s[27], s[19], s[11], s[3],
@@ -74,7 +74,7 @@ fn ip<T: Copy>(s: &[T]) -> Vec<T> {
 }
 
 #[rustfmt::skip]
-fn ipl1<T: Copy>(s: &[T]) -> Vec<T> {
+fn permutation_ipl1<T: Copy>(s: &[T]) -> Vec<T> {
     vec![s[39], s[7], s[47], s[15], s[55], s[23], s[63], s[31],
 		s[38], s[6], s[46], s[14], s[54], s[22], s[62], s[30],
 		s[37], s[5], s[45], s[13], s[53], s[21], s[61], s[29],
@@ -271,6 +271,15 @@ fn permutation_p<T: Copy>(s: &[T]) -> Vec<T> {
 		s[18], s[12], s[29], s[5], s[21], s[10], s[3], s[24]]
 }
 
+fn arr_xor<T: BitXor<T> + Copy>(a: &[T], b: &[T]) -> Vec<<T as BitXor>::Output> {
+    assert_eq!(a.len(), b.len());
+
+    a.into_iter()
+        .zip(b.iter())
+        .map(|(a, b)| *a ^ *b)
+        .collect::<Vec<_>>()
+}
+
 fn rounds(binary_ip: &[bool], keys: &[Vec<bool>], decrypt: bool) -> (Vec<bool>, Vec<bool>) {
     let mut left_block: Vec<bool> = binary_ip[..32].into_iter().cloned().collect();
     let mut right_block: Vec<bool> = binary_ip[32..].into_iter().cloned().collect();
@@ -280,20 +289,12 @@ fn rounds(binary_ip: &[bool], keys: &[Vec<bool>], decrypt: bool) -> (Vec<bool>, 
 
         let key = if decrypt { &keys[15 - i] } else { &keys[i] };
 
-        let tmp = right_block_expanded
-            .into_iter()
-            .zip(key.iter())
-            .map(|(a, b)| a ^ *b)
-            .collect::<Vec<_>>();
+        let tmp = arr_xor(&right_block_expanded, &key);
 
         let tmp = substitution(&tmp);
         let tmp = permutation_p(&tmp);
 
-        let tmp = tmp
-            .into_iter()
-            .zip(left_block.iter())
-            .map(|(a, b)| a ^ *b)
-            .collect::<Vec<_>>();
+        let tmp = arr_xor(&tmp, &left_block);
 
         left_block = right_block;
         right_block = tmp;
@@ -313,10 +314,10 @@ fn encrypt(data: &[u8], keys: &[Vec<bool>]) -> Vec<u8> {
             buffer[chunk.len()..].fill(0);
         }
         let message = bytes_to_binary(&buffer);
-        let binary_ip = ip(&message);
+        let binary_ip = permutation_ip(&message);
         let (l, r) = rounds(&binary_ip, keys, false);
         let lr: Vec<_> = r.into_iter().chain(l.into_iter()).collect();
-        let lr = ipl1(&lr);
+        let lr = permutation_ipl1(&lr);
         res.extend(binary_to_bytes(&lr));
     }
 
@@ -328,10 +329,10 @@ fn decrypt(data: &[u8], keys: &[Vec<bool>]) -> Vec<u8> {
 
     for chunk in data.chunks(8) {
         let chunk = bytes_to_binary(chunk);
-        let chunk = ip(&chunk);
+        let chunk = permutation_ip(&chunk);
         let (l, r) = rounds(&chunk, keys, true);
         let lr: Vec<_> = r.into_iter().chain(l.into_iter()).collect();
-        let lr = ipl1(&lr);
+        let lr = permutation_ipl1(&lr);
         res.extend(binary_to_bytes(&lr));
     }
 
