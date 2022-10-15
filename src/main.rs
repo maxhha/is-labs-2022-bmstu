@@ -13,7 +13,7 @@ fn binary_to_bytes(s: &[bool]) -> Vec<u8> {
 }
 
 #[rustfmt::skip]
-fn pc1<T: Copy>(s: &[T]) -> (Vec<T>, Vec<T>) {
+fn permutation_b<T: Copy>(s: &[T]) -> (Vec<T>, Vec<T>) {
     let c0 = vec![
         s[56], s[48], s[40], s[32], s[24], s[16], s[8],
         s[0], s[57], s[49], s[41], s[33], s[25], s[17],
@@ -30,7 +30,7 @@ fn pc1<T: Copy>(s: &[T]) -> (Vec<T>, Vec<T>) {
 }
 
 #[rustfmt::skip]
-fn pc2(s: Vec<bool>) -> Vec<bool> {
+fn permutation_cp(s: Vec<bool>) -> Vec<bool> {
     vec![
         s[13], s[16], s[10], s[23], s[0], s[4], s[2], s[27],
 		s[14], s[5], s[20], s[9], s[22], s[18], s[11], s[3],
@@ -45,7 +45,7 @@ const SHIFTS: [usize; 16] = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1];
 
 fn generate_keys(s: &str) -> Vec<Vec<bool>> {
     let initial_key = bytes_to_binary(s.as_bytes());
-    let (mut c, mut d) = pc1(&initial_key);
+    let (mut c, mut d) = permutation_b(&initial_key);
     let mut keys = Vec::with_capacity(16);
 
     for i in 0..16 {
@@ -53,7 +53,7 @@ fn generate_keys(s: &str) -> Vec<Vec<bool>> {
         d.rotate_left(SHIFTS[i]);
         let key = c.iter().chain(d.iter()).cloned().collect();
 
-        keys.push(pc2(key));
+        keys.push(permutation_cp(key));
     }
 
     return keys;
@@ -365,13 +365,25 @@ fn main() {
 
     let keys = generate_keys(&format!("{:08}", args.key));
 
-    let input = std::fs::read(&args.input).unwrap();
+    let mut input = std::fs::read(&args.input).unwrap();
 
-    let data = if args.decode {
+    if args.encode {
+        let r = 8 - input.len() % 8;
+        let r: u8 = r.try_into().unwrap();
+        input.extend((0..r).into_iter().map(|_| r))
+    }
+
+    let mut data = if args.decode {
         decrypt(&input, &keys)
     } else {
         encrypt(&input, &keys)
     };
+
+    if args.decode {
+        let r = data.last().unwrap();
+        let s = data.len() - usize::from(*r);
+        data.drain(s..data.len());
+    }
 
     std::fs::write(&args.output, &data).unwrap();
 }
