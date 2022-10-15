@@ -1,22 +1,14 @@
 use std::process::exit;
 
-fn bytes_to_binary(s: &[u8]) -> Vec<char> {
+fn bytes_to_binary(s: &[u8]) -> Vec<bool> {
     s.into_iter()
-        .flat_map(|x| {
-            (0..8)
-                .into_iter()
-                .rev()
-                .map(|i| char::from(48 + ((*x >> i) & 1)))
-        })
+        .flat_map(|x| (0..8).into_iter().rev().map(|i| (*x >> i) & 1 != 0))
         .collect()
 }
 
-fn binary_to_bytes(s: &[char]) -> Vec<u8> {
+fn binary_to_bytes(s: &[bool]) -> Vec<u8> {
     s.chunks(8)
-        .map(|x| {
-            let x: String = x.into_iter().collect();
-            u8::from_str_radix(&x, 2).unwrap()
-        })
+        .map(|x| x.into_iter().fold(0u8, |acc, b| (acc << 1) | u8::from(*b)))
         .collect()
 }
 
@@ -38,7 +30,7 @@ fn pc1<T: Copy>(s: &[T]) -> (Vec<T>, Vec<T>) {
 }
 
 #[rustfmt::skip]
-fn pc2(s: Vec<char>) -> Vec<char> {
+fn pc2(s: Vec<bool>) -> Vec<bool> {
     vec![
         s[13], s[16], s[10], s[23], s[0], s[4], s[2], s[27],
 		s[14], s[5], s[20], s[9], s[22], s[18], s[11], s[3],
@@ -51,7 +43,7 @@ fn pc2(s: Vec<char>) -> Vec<char> {
 
 const SHIFTS: [usize; 16] = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1];
 
-fn generate_keys(s: &str) -> Vec<Vec<char>> {
+fn generate_keys(s: &str) -> Vec<Vec<bool>> {
     let initial_key = bytes_to_binary(s.as_bytes());
     let (mut c, mut d) = pc1(&initial_key);
     let mut keys = Vec::with_capacity(16);
@@ -252,19 +244,20 @@ const SBLOCKS : [[[u8; 4]; 16]; 8] = [
 ],
 ];
 
-fn substitution(s: &[char]) -> Vec<char> {
+fn substitution(s: &[bool]) -> Vec<bool> {
     let mut res = Vec::with_capacity(32);
 
     for (i, chunk) in s.chunks(6).enumerate() {
-        let x: String = chunk[1..5].into_iter().collect();
-        let x = usize::from_str_radix(&x, 2).unwrap();
+        let x = (usize::from(chunk[1]) << 3)
+            | (usize::from(chunk[2]) << 2)
+            | (usize::from(chunk[3]) << 1)
+            | usize::from(chunk[4]);
 
-        let y: String = format!("{}{}", chunk[0], chunk[5]);
-        let y = usize::from_str_radix(&y, 2).unwrap();
+        let y = (usize::from(chunk[0]) << 1) | usize::from(chunk[5]);
 
         let r = SBLOCKS[i][x][y];
 
-        res.extend(format!("{r:04b}").chars());
+        res.extend((0..4).into_iter().rev().map(|i| (r >> i) & 1 != 0));
     }
 
     return res;
@@ -278,41 +271,38 @@ fn permutation_p<T: Copy>(s: &[T]) -> Vec<T> {
 		s[18], s[12], s[29], s[5], s[21], s[10], s[3], s[24]]
 }
 
-fn rounds(binary_ip: &[char], keys: &[Vec<char>], decrypt: bool) -> (Vec<char>, Vec<char>) {
-    let mut left_block: Vec<char> = binary_ip[..32].into_iter().cloned().collect();
-    let mut right_block: Vec<char> = binary_ip[32..].into_iter().cloned().collect();
+fn rounds(binary_ip: &[bool], keys: &[Vec<bool>], decrypt: bool) -> (Vec<bool>, Vec<bool>) {
+    let mut left_block: Vec<bool> = binary_ip[..32].into_iter().cloned().collect();
+    let mut right_block: Vec<bool> = binary_ip[32..].into_iter().cloned().collect();
 
     for i in 0..16 {
-        let right_block_expanded: String = expansion(&right_block).into_iter().collect();
-        let right_block_expanded = u64::from_str_radix(&right_block_expanded, 2).unwrap();
+        let right_block_expanded = expansion(&right_block);
 
         let key = if decrypt { &keys[15 - i] } else { &keys[i] };
-        let key: String = key.into_iter().collect();
-        let key = u64::from_str_radix(&key, 2).unwrap();
 
-        let tmp = right_block_expanded ^ key;
-        let tmp_string = format!("{tmp:048b}");
+        let tmp = right_block_expanded
+            .into_iter()
+            .zip(key.iter())
+            .map(|(a, b)| a ^ *b)
+            .collect::<Vec<_>>();
 
-        let right_block_expanded: Vec<_> = tmp_string.chars().into_iter().collect();
-        let tmp = substitution(&right_block_expanded);
+        let tmp = substitution(&tmp);
         let tmp = permutation_p(&tmp);
-        let tmp: String = tmp.into_iter().collect();
-        let tmp = u64::from_str_radix(&tmp, 2).unwrap();
 
-        let left_block_s: String = left_block.into_iter().collect();
-        let left_block_u = u64::from_str_radix(&left_block_s, 2).unwrap();
-
-        let tmp = tmp ^ left_block_u;
-        let tmp = format!("{tmp:032b}");
+        let tmp = tmp
+            .into_iter()
+            .zip(left_block.iter())
+            .map(|(a, b)| a ^ *b)
+            .collect::<Vec<_>>();
 
         left_block = right_block;
-        right_block = tmp.chars().into_iter().collect();
+        right_block = tmp;
     }
 
     (left_block, right_block)
 }
 
-fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
+fn encrypt(data: &[u8], keys: &[Vec<bool>]) -> Vec<u8> {
     let chunks = data.chunks(8);
     let mut res = Vec::new();
     let mut buffer = vec![0u8; 8];
@@ -320,7 +310,7 @@ fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
     for chunk in chunks {
         buffer[..chunk.len()].copy_from_slice(chunk);
         if chunk.len() < buffer.len() {
-            buffer[chunk.len()..].fill(46);
+            buffer[chunk.len()..].fill(0);
         }
         let message = bytes_to_binary(&buffer);
         let binary_ip = ip(&message);
@@ -333,11 +323,11 @@ fn encrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
     res
 }
 
-fn decrypt(data: &[u8], keys: &[Vec<char>]) -> Vec<u8> {
+fn decrypt(data: &[u8], keys: &[Vec<bool>]) -> Vec<u8> {
     let mut res = Vec::new();
 
     for chunk in data.chunks(8) {
-        let chunk: Vec<char> = bytes_to_binary(chunk);
+        let chunk = bytes_to_binary(chunk);
         let chunk = ip(&chunk);
         let (l, r) = rounds(&chunk, keys, true);
         let lr: Vec<_> = r.into_iter().chain(l.into_iter()).collect();
@@ -398,6 +388,6 @@ mod tests {
         let keys = generate_keys(key);
         let enc_data = encrypt(message, &keys);
         let dec_data = decrypt(&enc_data, &keys);
-        assert_eq!(&dec_data, "hello world!\n...".as_bytes());
+        assert_eq!(&dec_data, "hello world!\n\0\0\0".as_bytes());
     }
 }
