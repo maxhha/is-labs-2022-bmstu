@@ -1,6 +1,6 @@
 use rsa::{
     pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, EncodeRsaPrivateKey, EncodeRsaPublicKey},
-    pss::{BlindedSigningKey, VerifyingKey},
+    pkcs1v15::{SigningKey, VerifyingKey},
     RsaPrivateKey, RsaPublicKey,
 };
 use sha2::Sha256;
@@ -75,7 +75,7 @@ fn main() {
             let private_key = RsaPrivateKey::read_pkcs1_pem_file(private_key)
                 .expect("failed to read private key");
 
-            let signing_key = BlindedSigningKey::<Sha256>::new(private_key);
+            let signing_key = SigningKey::<Sha256>::new(private_key);
 
             let data = std::fs::read(data).expect("failed to read input data");
             let sign = signing_key
