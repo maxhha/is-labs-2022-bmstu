@@ -155,7 +155,10 @@ impl Tree {
                 left,
                 right,
             } => {
-                if iter.next().expect("Failed to decompress") {
+                if iter
+                    .next()
+                    .expect("Failed to decompress: unexpected number of bits")
+                {
                     right._decompress(iter)
                 } else {
                     left._decompress(iter)

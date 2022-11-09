@@ -4,7 +4,7 @@ use rsa::{
     RsaPrivateKey, RsaPublicKey,
 };
 use sha2::Sha256;
-use signature::{RandomizedSigner, Signature, Verifier};
+use signature::{Signature, Signer, Verifier};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -70,17 +70,13 @@ fn main() {
             data,
             signature: sign_path,
         } => {
-            let mut rng = rand::thread_rng();
-
             let private_key = RsaPrivateKey::read_pkcs1_pem_file(private_key)
                 .expect("failed to read private key");
 
             let signing_key = SigningKey::<Sha256>::new(private_key);
 
             let data = std::fs::read(data).expect("failed to read input data");
-            let sign = signing_key
-                .try_sign_with_rng(&mut rng, &data)
-                .expect("failed to sign data");
+            let sign = signing_key.try_sign(&data).expect("failed to sign data");
 
             std::fs::write(sign_path, sign.as_bytes()).expect("failed to write signature");
             println!("SIGNED!");
